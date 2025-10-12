@@ -26,6 +26,32 @@ pip install flet
 - Visit your dashboard and copy your API Key
 - You’ll be asked to paste it the first time you launch the app. It will be saved locally.
 
+## Clone the repository
+
+```bash
+git clone https://github.com/DanielDominguezBender/WeatherApp.git
+cd WeatherApp
+```
+
+## Create a virtual environment (recommended)
+
+```bash
+python -m venv venv
+source venv/bin/activate  # For Linux/macOS
+venv\\Scripts\\activate   # For Windows
+```
+## Install the required dependencies
+
+```python
+pip install flet
+```
+## Get your free API Key
+
+- Go to: https://openweathermap.org/api
+- Sign up for a free account
+- Visit your dashboard and copy your API Key
+- You’ll be asked to paste it the first time you launch the app. It will be saved locally.
+
 ## Run the app
 
 Run as a desktop app:
