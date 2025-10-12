@@ -1,4 +1,4 @@
-# Weatherapp app
+# Weatherapp
 
 ## Clone the repository
 
