@@ -1,4 +1,4 @@
-#🧩Step-by-Step Explanation: main.py
+# 🧩Step-by-Step Explanation: main.py
 
 ```python
 import flet as ft
@@ -40,7 +40,7 @@ ft.app(target=main)
 It loads Flet, grabs the custom homepage layout, and tells Flet to render it inside a new app window or browser tab.
 
 
-#🧩Step-by-Step Explanation: homepage.py
+# 🧩Step-by-Step Explanation: homepage.py
 
 🔹Step 1: Class Definition
 
