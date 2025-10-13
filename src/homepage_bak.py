@@ -1,61 +1,45 @@
-# -------------------------------
-# WEATHERAPP HOMEPAGE VIEW
-# -------------------------------
-# Este archivo define la interfaz principal de la aplicación "WeatherApp",
-# construida con el framework Flet (similar a Flutter, pero para Python).
-# Permite al usuario introducir una ciudad, obtener datos meteorológicos
-# desde la API de OpenWeatherMap y visualizar la información en paneles desplegables.
-# -------------------------------
-
-# Importación de librerías necesarias
+#Import needed
 import flet as ft
 import json
 import sys
+
 from datetime import datetime
 
-# Dependiendo del sistema operativo, se importan módulos para hacer peticiones HTTP seguras
-if sys.platform in ["android", "ios", "emscripten"]:
+if sys.platform =="android" or sys.platform == "ios" or sys.platform == "emscripten":
     import urllib.request
     import ssl
-elif sys.platform in ["linux", "win32", "darwin"]:
+elif sys.platform == "linux" or sys.platform == "win32" or sys.platform == "darwin":
     import urllib.request
     import ssl
 
 
-# -------------------- CLASE PRINCIPAL: HOMEPAGEVIEW --------------------
-# Esta clase representa la pantalla principal de la app.
-# Hereda de ft.Column para organizar los elementos en formato columna.
+# Class dedicated to show the Home Page (with multiple expansion panels)
 class HomepageView(ft.Column):
     def __init__(self, page):
         super().__init__()
         self.page = page
-        self._default_units = "Metric"  # Unidades por defecto: métricas o imperiales
-        self._default_lang = "En"       # Idioma por defecto: inglés
-        self.data = None                # Variable donde se almacenan los datos meteorológicos
+        self._default_units = "Metric"  # "metric" or "imperial"
+        self._default_lang = "En"       # "en","es","de","fr", ...
+        self.data = None
 
-    # ---------- DIALOGOS ----------
-    # Abre un cuadro de diálogo para introducir o ver la API key
+    # ---------- Dialogs ----------
     async def open_dlg(self, e):
         self.api_key_field.value = await self.page.client_storage.get_async("api_key")
         self.page.overlay.append(self.dlg)
         self.dlg.open = True
         self.page.update()
 
-    # Guarda la API key introducida por el usuario
     async def save_api_key(self, e):
         await self.page.client_storage.set_async("api_key", self.api_key_field.value)
         self.dlg.open = False
         self.page.update()
 
-    # Elimina la API key almacenada
     async def delete_api_key(self, e):
         await self.page.client_storage.remove_async("api_key")
         self.api_key_field.value = ""
         self.page.update()
 
-    # ---------- PREFERENCIAS ----------
-    # Se ejecuta cuando el usuario cambia idioma, unidades o ciudad.
-    # Guarda los cambios y actualiza la vista del clima.
+    # ---------- Preferences ----------
     async def on_pref_change(self, e):
         if self.dd_units.value:
             await self.page.client_storage.set_async("units", self.dd_units.value)
@@ -64,15 +48,12 @@ class HomepageView(ft.Column):
         if (self.city_field.value or "").strip():
             await self.get_weather(None)
 
-    # ---------- OBTENER Y MOSTRAR DATOS DEL CLIMA ----------
-    # Realiza la llamada a la API de OpenWeatherMap para obtener los datos meteorológicos.
+    # ---------- Weather fetch & render ----------
     async def get_weather(self, e):
         try:
-            # Recuperar API key y ciudad introducida
             api_key = await self.page.client_storage.get_async("api_key")
             city_raw = (self.city_field.value or "").strip()
 
-            # Validar que ambos campos estén presentes
             if not api_key and not city_raw:
                 self.error_dlg.content = ft.Text("Please provide BOTH City and API key.", size=18)
                 self.page.overlay.append(self.error_dlg); self.error_dlg.open = True; self.page.update(); return
@@ -83,48 +64,40 @@ class HomepageView(ft.Column):
                 self.error_dlg.content = ft.Text("Please provide a City.", size=18)
                 self.page.overlay.append(self.error_dlg); self.error_dlg.open = True; self.page.update(); return
 
-            # Leer las preferencias del usuario o usar las predeterminadas
             units = self.dd_units.value or self._default_units
             lang  = self.dd_lang.value  or self._default_lang
 
-            # Mostrar un spinner de carga mientras se hace la petición
             spinner = ft.ProgressRing()
             self.page.overlay.append(spinner); self.page.update()
 
-            # Preparar la ciudad para incluir en la URL (reemplaza espacios y caracteres especiales)
             city_q = city_raw.replace(" ", "+").translate(
                 str.maketrans({"ä": "ae", "ö": "oe", "ü": "ue", "β": "ss"})
             )
-
-            # Construir la URL de la API con los parámetros adecuados
             url = (
                 "https://api.openweathermap.org/data/2.5/weather"
                 f"?q={city_q}&appid={api_key}&lang={lang}&units={units}"
             )
 
-            # Realizar la petición a la API usando HTTPS
             ctx = ssl.create_default_context()
             with urllib.request.urlopen(url, context=ctx) as response:
                 self.data = json.loads(response.read())
 
-            # Comprobar si hubo error en la respuesta (por ejemplo, ciudad no encontrada)
             cod = self.data.get("cod", 200)
             if (isinstance(cod, str) and cod != "200") or (isinstance(cod, int) and cod != 200):
                 msg = self.data.get("message", "Unknown error")
                 raise RuntimeError(f"OpenWeather error: {msg}")
 
-            # Procesar y convertir los valores recibidos
+            # Values & units
             temp_val  = round(self.data["main"]["temp"], 1)
             temp_unit = "°C" if units == "Metric" else "°F"
 
-            # Convertir velocidad del viento según las unidades seleccionadas
             wind_raw = self.data["wind"]["speed"]
             if units == "Metric":
-                wind_val, wind_unit = round(wind_raw * 3.6, 1), "km/h"   # API da m/s
+                wind_val, wind_unit = round(wind_raw * 3.6, 1), "km/h"   # API gives m/s
             else:
-                wind_val, wind_unit = round(wind_raw, 1), "mph"
+                wind_val, wind_unit = round(wind_raw, 1), "mph"          # API gives mph
 
-            # Actualizar las etiquetas del UI con los valores actuales
+            # Update labels
             self.temperature.value = f"{temp_val} {temp_unit}"
             self.weather.value     = f"{self.data['weather'][0]['description']}"
             self.pressure.value    = f"{self.data['main']['pressure']} hPa"
@@ -132,23 +105,20 @@ class HomepageView(ft.Column):
             self.humidity.value    = f"{self.data['main']['humidity']} %"
             self.last_update.value = datetime.fromtimestamp(self.data["dt"]).strftime("%d/%m/%Y %H:%M:%S")
 
-            # Cargar el icono correspondiente al estado del tiempo
+            # Icon
             try:
                 icon_code = self.data["weather"][0]["icon"]
                 self.image.src = f"https://openweathermap.org/img/wn/{icon_code}@2x.png"
             except Exception:
                 pass
 
-            # Guardar la última ciudad buscada
             await self.page.client_storage.set_async("last_city", city_raw)
 
-            # Ocultar el spinner de carga y actualizar la interfaz
             if spinner in self.page.overlay:
                 self.page.overlay.remove(spinner)
             self.page.update()
 
         except Exception as ex:
-            # Si ocurre un error, eliminar cualquier spinner visible y mostrar notificación
             for ctrl in list(self.page.overlay):
                 if isinstance(ctrl, ft.ProgressRing):
                     self.page.overlay.remove(ctrl)
@@ -159,9 +129,9 @@ class HomepageView(ft.Column):
             self.error_dlg.open = True
             self.page.update()
     
-    # --- GESTIÓN DE TEMA (CLARO / OSCURO) ---
-    # Sincroniza el icono del botón con el tema actual
+    # --- Theme Dark / Light ---
     def _sync_theme_button(self):
+        # Show the icon for the *target* mode
         if self.page.theme_mode == ft.ThemeMode.DARK:
             self.theme_button.icon = ft.Icons.LIGHT_MODE
             self.theme_button.tooltip = "Switch to Light mode"
@@ -169,18 +139,18 @@ class HomepageView(ft.Column):
             self.theme_button.icon = ft.Icons.DARK_MODE
             self.theme_button.tooltip = "Switch to Dark mode"
 
-    # Carga el tema guardado desde el almacenamiento local
     async def _load_theme(self):
         saved = await self.page.client_storage.get_async("theme_mode")
         if saved == "dark":
             self.page.theme_mode = ft.ThemeMode.DARK
         elif saved == "light":
             self.page.theme_mode = ft.ThemeMode.LIGHT
+        # If none or unknown -> keep whatever you set by default (SYSTEM)
         self._sync_theme_button()
         self.page.update()
 
-    # Alterna entre modo claro y oscuro, y guarda la preferencia
     async def toggle_theme(self, e):
+        # Toggle Light <-> Dark (if SYSTEM, go to DARK first)
         cur = self.page.theme_mode
         new_mode = ft.ThemeMode.DARK if cur != ft.ThemeMode.DARK else ft.ThemeMode.LIGHT
         self.page.theme_mode = new_mode
@@ -190,33 +160,33 @@ class HomepageView(ft.Column):
         )
         self.page.update()
 
-    # ---------- CONSTRUCCIÓN DE LA INTERFAZ ----------
+
+    # ---------- UI ----------
     def build(self):
-        # Configura el título, tema y alineación de la página principal
         self.page.title = "WeatherApp"
         self.page.theme_mode = ft.ThemeMode.SYSTEM
         self.page.horizontal_alignment = ft.CrossAxisAlignment.CENTER
 
-        # Botón de cambio de tema (oscuro / claro)
+    # Create the theme toggle button (icon/tooltip will be synced below)
         self.theme_button = ft.IconButton(
-            icon=ft.Icons.DARK_MODE,
+            icon=ft.Icons.DARK_MODE,              # placeholder; will be updated by _sync_theme_button()
             tooltip="Switch to Dark mode",
-            on_click=self.toggle_theme,
+            on_click=self.toggle_theme,           # async handler is fine
         )
 
-        # Barra superior con el título y el botón de tema
         self.page.appbar = ft.AppBar(
             title=ft.Text("WeatherApp"),
             color=ft.Colors.BLACK,
             bgcolor=ft.Colors.BLUE_900,
-            actions=[self.theme_button],
+            actions=[self.theme_button],          # <-- puts the button on the upper-right
             center_title=True
         )
 
+        # Make the button reflect the current mode,
+        # then load any saved preference from client storage.
         self._sync_theme_button()
         self.page.run_task(self._load_theme)
 
-        # Botón flotante para gestionar la API key
         self.page.floating_action_button = ft.FloatingActionButton(
             icon=ft.Icons.ADD,
             bgcolor=ft.Colors.BLUE_900,
@@ -227,8 +197,7 @@ class HomepageView(ft.Column):
             on_click=self.open_dlg,
         )
 
-        # ---------- DIALOGOS ----------
-        # Cuadro de diálogo para introducir la API key
+        # Dialogs
         self.api_key_field = ft.TextField(hint_text="Please provide API key")
         self.dlg = ft.AlertDialog(
             title=ft.Text("Provide API key"),
@@ -246,8 +215,6 @@ class HomepageView(ft.Column):
             actions_alignment=ft.MainAxisAlignment.CENTER,
             shape=ft.RoundedRectangleBorder(radius=40)
         )
-
-        # Diálogo genérico para mostrar errores
         self.error_dlg = ft.AlertDialog(
             content=ft.Text("Please provide City and API key.", size=18),
             actions=[
@@ -258,8 +225,7 @@ class HomepageView(ft.Column):
             ],
         )
 
-        # ---------- PREFERENCIAS ----------
-        # Desplegables para idioma y unidades
+        # Preferences
         self.dd_units = ft.Dropdown(
             label="Units",
             value=self._default_units,
@@ -281,14 +247,13 @@ class HomepageView(ft.Column):
         )
         prefs_row = ft.Row([self.dd_units, self.dd_lang], alignment=ft.MainAxisAlignment.CENTER)
 
-        # ---------- SECCIÓN PRINCIPAL ----------
-        # Imagen, campo de ciudad y botón de consulta
+        # Image & inputs
         self.image = ft.Image(src="weatherapp_icon.png", width=100, height=100)
         self.headline = ft.Text("Current Weather", weight=ft.FontWeight.BOLD, size=24, text_align=ft.TextAlign.CENTER)
         self.city_field = ft.TextField(hint_text="Please choose a City", label="City", on_submit=self.get_weather, width=300)
         self.button = ft.ElevatedButton("Show weather", height=35, on_click=self.get_weather, bgcolor=ft.Colors.BLUE_900)
 
-        # Etiquetas para mostrar datos (rellenadas al consultar la API)
+        # Data labels (values only; headers are handled by panels)
         self.temperature = ft.Text("-", size=18)
         self.weather     = ft.Text("-", size=18)
         self.pressure    = ft.Text("-", size=18)
@@ -296,34 +261,50 @@ class HomepageView(ft.Column):
         self.humidity    = ft.Text("-", size=18)
         self.last_update = ft.Text("-", size=18)
 
-        # ---------- PANELES EXPANSIBLES ----------
-        # Cada panel muestra una métrica meteorológica diferente
+        # Multiple Expansion Panels — one per metric
         panels = ft.ExpansionPanelList(
             controls=[
-                ft.ExpansionPanel(header=ft.ListTile(title=ft.Text("Temperature")),
-                                  content=ft.Container(content=self.temperature, padding=10),
-                                  expanded=True, can_tap_header=True),
-                ft.ExpansionPanel(header=ft.ListTile(title=ft.Text("Weather")),
-                                  content=ft.Container(content=self.weather, padding=10),
-                                  expanded=True, can_tap_header=True),
-                ft.ExpansionPanel(header=ft.ListTile(title=ft.Text("Humidity")),
-                                  content=ft.Container(content=self.humidity, padding=10),
-                                  expanded=True, can_tap_header=True),
-                ft.ExpansionPanel(header=ft.ListTile(title=ft.Text("Wind Speed")),
-                                  content=ft.Container(content=self.wind_speed, padding=10),
-                                  expanded=True, can_tap_header=True),
-                ft.ExpansionPanel(header=ft.ListTile(title=ft.Text("Pressure")),
-                                  content=ft.Container(content=self.pressure, padding=10),
-                                  expanded=True, can_tap_header=True),
-                ft.ExpansionPanel(header=ft.ListTile(title=ft.Text("Updated at")),
-                                  content=ft.Container(content=self.last_update, padding=10),
-                                  expanded=True, can_tap_header=True),
+                ft.ExpansionPanel(
+                    header=ft.ListTile(title=ft.Text("Temperature")),
+                    content=ft.Container(content=self.temperature, padding=10),
+                    expanded=True,
+                    can_tap_header=True,
+                ),
+                ft.ExpansionPanel(
+                    header=ft.ListTile(title=ft.Text("Weather")),
+                    content=ft.Container(content=self.weather, padding=10),
+                    expanded=True,
+                    can_tap_header=True,
+                ),
+                ft.ExpansionPanel(
+                    header=ft.ListTile(title=ft.Text("Humidity")),
+                    content=ft.Container(content=self.humidity, padding=10),
+                    expanded=True,
+                    can_tap_header=True,
+                ),
+                ft.ExpansionPanel(
+                    header=ft.ListTile(title=ft.Text("Wind Speed")),
+                    content=ft.Container(content=self.wind_speed, padding=10),
+                    expanded=True,
+                    can_tap_header=True,
+                ),
+                ft.ExpansionPanel(
+                    header=ft.ListTile(title=ft.Text("Pressure")),
+                    content=ft.Container(content=self.pressure, padding=10),
+                    expanded=True,
+                    can_tap_header=True,
+                ),
+                ft.ExpansionPanel(
+                    header=ft.ListTile(title=ft.Text("Updated at")),
+                    content=ft.Container(content=self.last_update, padding=10),
+                    expanded=True,
+                    can_tap_header=True,
+                ),
             ],
             elevation=2,
         )
 
-        # ---------- ESTRUCTURA FINAL ----------
-        # Se organizan todos los elementos de la página en una columna central
+        # Layout
         self.controls.append(
             ft.Column(
                 controls=[
